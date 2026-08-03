@@ -2,43 +2,112 @@
 
 > AI-Powered UAV Flight Log Diagnosis
 
-FlightLog Copilot combines a deterministic Python analysis engine with
-optional OpenAI or OpenAI-compatible AI providers to detect anomalies, evaluate possible root causes, and
-recommend evidence-based validation experiments from UAV flight logs.
+FlightLog Copilot is a working Streamlit application that maps heterogeneous UAV CSV logs to a canonical schema, computes deterministic flight-control metrics in Python, ranks explainable root-cause hypotheses, and optionally asks an AI provider to explain the structured results and recommend validation experiments.
 
-FlightLog Copilot은 STM32 기반 UAV 비행제어기의 CSV 로그를 표준 파라미터로 매핑하고, Python으로 수치 지표와 이상 징후를 계산한 뒤, 설명 가능한 규칙으로 원인 가설의 진단 우선순위를 정하는 Streamlit 애플리케이션입니다. 외부 AI Provider 연동은 선택 기능입니다.
+It is not a CSV-to-LLM wrapper: parameter interpretation, unit conversion, signal processing, quantitative evidence, and rule scores are produced locally before any optional AI request.
 
-사이드바의 `KO / EN` 선택기로 화면, 진단 표현, AI 응답 언어와 다운로드 보고서를 한국어 또는 영어로 전환할 수 있습니다. 언어를 변경해도 업로드·확정 매핑·분석 결과는 유지됩니다.
+<p align="center">
+  <img
+    src="docs/images/flight-analysis-dashboard.png"
+    alt="FlightLog Copilot quantitative flight-log analysis dashboard"
+    width="100%"
+  />
+</p>
 
-## 문제 정의와 역할 분리
+한국어 요약: FlightLog Copilot은 STM32 기반 UAV 비행 로그를 사용자가 확인한 표준 파라미터로 변환하고, Python 정량 분석과 설명 가능한 규칙으로 진단 가설의 검토 우선순위를 제시하는 로컬 웹 애플리케이션입니다. AI Provider 연동은 선택 기능이며 원시 CSV를 대신 분석하지 않습니다.
 
-비행 로그의 컬럼 이름·단위·좌표계는 펌웨어마다 다릅니다. 이름만 보고 `pos_d`를 고도로 단정하거나 원시 CSV 전체를 모델에 맡기면 부호와 단위 오해가 진단 전체를 왜곡할 수 있습니다.
+The `KO / EN` selector changes the application UI, diagnostic text, optional AI response language, and downloadable reports without discarding uploaded data, confirmed mappings, or local analysis results.
 
-- Python 엔진: CSV 로딩, 매핑 변환, 구간 선택, 모든 정량 계산, 데이터 품질 검사, 규칙 기반 점수 계산
-- AI Provider: Python이 만든 구조화 JSON만 받아 가설 관계와 우선순위를 설명하고 추가 검증 실험을 제안
-- 사용자: 좌표계, 축 방향, 단위, 부호와 최종 매핑을 확인
+## Problem and Design Principles
 
-원시 CSV와 개별 로그 행은 외부 AI 요청에 포함되지 않습니다. API 키가 없거나 호출이 실패해도 Python 분석과 보고서는 정상 동작합니다.
+Flight-log column names, units, coordinate frames, and sign conventions vary across firmware and logging configurations. Treating a name such as `pos_d` as altitude without checking its frame and sign can invalidate every downstream metric. FlightLog Copilot addresses that risk with four design principles:
 
-## 전체 흐름
+- **Human-confirmed semantics:** automatic mapping proposes candidates, but only mappings explicitly confirmed by the user enter the analysis.
+- **Deterministic evidence first:** Python performs validation, transformation, statistics, signal processing, and hypothesis scoring.
+- **Explainable diagnosis:** every score exposes supporting rules, counter-evidence, missing inputs, limitations, and suggested tests.
+- **Optional and bounded AI:** AI receives a compact structured analysis result, never the complete CSV or credentials, and local analysis remains usable if AI is disabled or fails.
+
+## Architecture and Trust Boundary
 
 ```text
 CSV upload
-  -> column profile
-  -> explainable auto-mapping
+  -> column profiling
+  -> automatic mapping candidates
   -> user-confirmed mapping and transforms
   -> flight-segment selection
-  -> deterministic metrics
-  -> rule-based hypotheses
-  -> optional structured AI-provider explanation
+  -> deterministic Python analysis
+  -> explainable rule-based hypotheses
+  -> optional AI Copilot explanation
   -> Markdown / JSON / HTML reports
 ```
 
-코드는 UI(`app.py`), 입출력·매핑·전처리, 정량 분석, 규칙 진단, Provider별 AI 클라이언트, 보고서 렌더러로 분리되어 있습니다. `src/flightlog_copilot/llm/` 아래에서 비밀 저장, 일반 설정, OpenAI Responses API, OpenAI Compatible Chat Completions, Factory와 응답 schema를 분리합니다.
+| Component | Responsibility |
+| --- | --- |
+| Python analysis engine | Loads and validates data, applies unit/sign transforms, extracts a flight segment, computes statistics and signal-processing metrics, evaluates rules, and creates structured JSON. |
+| AI Copilot | Summarizes quantitative results, explains relationships between existing hypotheses, organizes evidence and counter-evidence, describes missing data, and recommends validation experiments. |
+| User | Confirms column meaning, units, coordinate frame, axis direction, sign, and the final mapping used by the analysis. |
 
-## 설치와 실행
+The external AI provider does **not** receive:
 
-Python 3.9 이상을 권장합니다.
+- the complete raw CSV;
+- individual log rows;
+- API keys or credential-store contents;
+- local file paths;
+- the user's PC account or other machine information.
+
+The codebase separates the Streamlit UI (`app.py`) from loading, mapping, preprocessing, quantitative analysis, rule evaluation, reporting, and provider-specific clients under `src/flightlog_copilot/`.
+
+## Core Features
+
+### 1. Explainable Parameter Mapping
+
+The mapper uses normalized column names, an alias dictionary, token similarity, data type, value range, and related-column context to propose canonical flight parameters with confidence and evidence. The user can override the source column, choose a unit, apply scale and offset, and reverse the sign.
+
+NED/ENU, FRD/FLU, and upward/downward-positive conventions are never inferred as facts. Down-axis candidates such as `pos_d` and `vel_d` remain subject to user review. This is a correctness boundary, not only a UI convenience: an incorrect frame, unit, or sign would distort the entire analysis.
+
+Confirmed mappings can be exported as JSON and reused. A profile stores the header hash, time unit, coordinate frame, reference-altitude source, column selection, unit, scale, offset, and sign. Older `barometer_altitude` profiles are migrated to `reference_altitude` with a barometer source when loaded.
+
+<p align="center">
+  <img
+    src="docs/images/parameter-mapping.png"
+    alt="Automatic and user-confirmed UAV flight-log parameter mapping"
+    width="100%"
+  />
+</p>
+
+### 2. Deterministic Quantitative Analysis
+
+After mapping confirmation and flight-segment selection, the local Python engine computes:
+
+- altitude RMSE, MAE, error distribution, steady-state error, and conservative step-response metrics;
+- sampling interval, estimated frequency, jitter, duplicate/reversed timestamps, and dropout candidates;
+- throttle-correction and motor-output saturation, duration, spread, and variability;
+- reference-altitude versus EKF bias, dispersion, Pearson correlation, and cross-correlation lag;
+- detrended, windowed Welch PSD and dominant vibration frequencies.
+
+Missing optional parameters disable only the affected calculation and are reported as unavailable; they do not stop the full workflow. All baseline analysis, rule evaluation, charts, and reports work without an AI call.
+
+### 3. Evidence-Based Hypothesis Diagnosis
+
+The rule engine evaluates 12 possible causes and orders them by a transparent **diagnostic review priority score**. This score is not a probability and does not establish the actual fault. Each hypothesis includes evidence, counter-evidence, missing parameters, known limitations, the rules that raised or lowered its score, and a recommended follow-up experiment.
+
+AI-proposed ideas are displayed separately as unverified hypotheses so they cannot be confused with rule-supported results.
+
+<p align="center">
+  <img
+    src="docs/images/hypothesis-diagnosis.png"
+    alt="Explainable rule-based root-cause hypothesis diagnosis"
+    width="100%"
+  />
+</p>
+
+### 4. Optional AI Copilot
+
+The application supports the official OpenAI API and OpenAI Chat Completions-compatible servers such as Ollama, vLLM, LiteLLM, LM Studio, llama.cpp server, and internal gateways. Provider-specific settings remain independent, and an AI failure never removes the deterministic analysis result.
+
+## Installation and Quick Start
+
+Python 3.9 or later is recommended.
 
 ```powershell
 python -m venv .venv
@@ -47,46 +116,45 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-브라우저에서 샘플을 시험하려면 `sample_data/sample_alt_hold.csv`를 업로드합니다.
+To explore the workflow, upload `sample_data/sample_alt_hold.csv`, review the proposed mapping, confirm the time and altitude units, choose an AltHold segment, and run the quantitative analysis.
 
-## AI Provider와 API 키 설정
+## AI Provider and API-Key Configuration
 
-사이드바의 `AI 설정`에서 다음 순서로 설정합니다.
+Open **AI settings** in the sidebar and follow this flow:
 
-1. `AI Copilot 활성화` 선택
-2. `OpenAI` 또는 `OpenAI Compatible` Provider 선택
-3. API 키 등록 또는 Compatible의 no-key 인증 방식 선택
-4. 모델 선택 또는 모델 ID 직접 입력
-5. 필요하면 `모델 목록 불러오기` 실행
-6. `AI 연결 테스트` 실행
-7. `AI 설정 저장` 실행
-8. 정량 분석 뒤 `AI 진단 실행`
+1. Enable `AI Copilot`.
+2. Select `OpenAI` or `OpenAI Compatible`.
+3. Register an API key, or choose the Compatible no-key mode.
+4. Select a discovered model or enter the actual model ID manually.
+5. Optionally load the model list from the provider.
+6. Run the short `AI connection test`.
+7. Save the non-secret settings.
+8. Run `AI diagnosis` after the local quantitative analysis completes.
 
-Provider별 설정은 독립적으로 유지됩니다.
-
-| Provider | API 방식 | Provider별 설정 |
+| Provider | API path | Configuration |
 | --- | --- | --- |
-| OpenAI | 공식 SDK Responses API와 Pydantic Structured Output | API 키, 모델 선택/직접 입력, temperature, 최대 출력 토큰 |
-| OpenAI Compatible | `{base_url}/v1/chat/completions` | Base URL, API 키/no-key/Bearer, 직접 모델 ID, temperature, 최대 출력 토큰 |
+| OpenAI | Official SDK Responses API with Pydantic structured output | API key, discovered/suggested/manual model ID, temperature, maximum output tokens |
+| OpenAI Compatible | `{base_url}/v1/chat/completions` | Base URL, API key/no-key/custom Bearer mode, discovered/manual model ID, temperature, maximum output tokens |
 
-Compatible Base URL은 `http://localhost:8000`, trailing slash, `/v1`, `/v1/` 입력을 모두 `http://localhost:8000/v1` 형태로 정규화합니다. `GET {base_url}/v1/models` 조회가 실패해도 직접 모델 ID 입력은 계속 사용할 수 있습니다. OpenAI 모델 드롭다운의 유지보수용 기본 목록은 `llm/models.py`에 있고, 목록에 없는 실제 모델 ID도 직접 입력할 수 있습니다.
+Compatible URLs ending with no slash, `/`, `/v1`, or `/v1/` are normalized to one `/v1` suffix. Failure of the optional `/v1/models` endpoint is non-fatal because manual model entry remains available. Bundled OpenAI model suggestions are conveniences, not guarantees that a model is enabled for a particular account; use model discovery and the connection test to verify availability.
 
-### API 키 저장과 로딩 우선순위
+<details>
+<summary>API-key storage, fallback, and deletion</summary>
 
-UI에서 등록한 키는 Python `keyring`을 통해 운영체제 비밀 저장소에 저장합니다. Windows에서는 사용 가능한 경우 Windows Credential Manager가 사용됩니다. OpenAI Compatible 키는 정규화된 Base URL의 해시별로 분리됩니다.
+Keys registered in the UI are stored through Python `keyring`; Windows uses Credential Manager when a supported backend is available. OpenAI Compatible credentials are separated by a hash of the normalized Base URL.
 
-실제 요청 키의 우선순위는 다음과 같습니다.
+Resolution order:
 
-1. 현재 Streamlit 세션에서 새로 등록한 키
-2. OS keyring 키
-3. `OPENAI_API_KEY` 또는 `OPENAI_COMPATIBLE_API_KEY` 환경변수
-4. 키 없음
+1. a key newly registered in the current Streamlit session;
+2. the OS keyring;
+3. `OPENAI_API_KEY` or `OPENAI_COMPATIBLE_API_KEY`;
+4. no key.
 
-keyring을 사용할 수 없거나 저장에 실패하면 평문 파일로 대체 저장하지 않고 현재 Streamlit 세션에만 유지합니다. 이 경우 앱 종료 후 다시 입력해야 합니다. 저장된 키는 입력창에 다시 채우지 않으며 화면에는 마지막 네 자리만 표시합니다. 환경변수 키는 앱에서 삭제하지 않으며 시스템 환경변수를 직접 변경해야 합니다.
+The password field is never repopulated. The UI shows only the final four characters of a stored key. If keyring access fails, the key is kept only in the current session and is never written to a plaintext fallback file. Deleting a key requires an explicit confirmation checkbox; environment variables are not modified by the application.
 
-API 키 삭제는 `저장된 API 키 삭제 확인`을 선택한 뒤 삭제 버튼을 누릅니다. API 키는 `ai_settings.json`, 매핑 프로필, 로그 분석 결과, Markdown/JSON/HTML 보고서에 포함되지 않습니다. 일반 AI 설정만 `platformdirs` 사용자 설정 디렉터리의 `FlightLogCopilot/ai_settings.json`에 atomic write로 저장됩니다. 손상된 설정 파일은 백업한 뒤 기본 설정으로 실행합니다.
+`ai_settings.json` contains only non-secret provider settings and is written atomically in the platform-specific user configuration directory. It never contains a complete key, masked key, or environment-variable value. Corrupt settings are backed up before defaults are loaded.
 
-환경변수 방식은 선택 fallback입니다. 필요하면 `.env.example`을 `.env`로 복사하되 실제 키를 Git에 커밋하지 마십시오.
+Environment variables remain an optional fallback:
 
 ```powershell
 Copy-Item .env.example .env
@@ -97,110 +165,145 @@ OPENAI_API_KEY=
 OPENAI_COMPATIBLE_API_KEY=
 ```
 
-연결 테스트는 짧은 `OK` 요청만 보냅니다. 인증 오류, endpoint/모델 404, 요청 한도 429, 서버 오류, timeout과 네트워크 오류를 실제 키나 Authorization 헤더 없이 사용자 메시지로 변환합니다.
+Never commit a real key.
 
-## CSV 파라미터
+</details>
 
-최소 분석 필수 파라미터:
+## Input Parameters and Mapping Profiles
+
+Minimum canonical parameters:
 
 - `timestamp`
 - `ekf_altitude`
 
-선택 파라미터:
+Optional groups:
 
-- 고도 추종: `altitude_setpoint`, `throttle_correction`, `althold_active`
-- 기준 고도 비교: `reference_altitude` (Barometer 또는 GNSS)
-- 출력: `throttle_base`, `motor_1`~`motor_4`
-- 구간 감지: `armed`, `althold_active`
-- 기타: `vertical_velocity`
+- altitude tracking: `altitude_setpoint`, `throttle_correction`, `althold_active`;
+- reference comparison: `reference_altitude` from barometer, GNSS, or another documented source;
+- actuator output: `throttle_base`, `motor_1` through `motor_4`;
+- segment detection: `armed`, `althold_active`;
+- supporting motion data: `vertical_velocity`.
 
-파라미터가 없으면 전체 프로그램을 중단하지 않고 해당 분석을 `계산 불가`로 표시합니다.
-
-## 자동 매핑과 수동 매핑
-
-자동 매핑은 정규화 이름, 별칭, 토큰 유사도, dtype, 값 범위를 조합해 후보와 신뢰도, 근거를 제공합니다. 값 범위만으로 물리 의미를 확정하지 않으며 낮은 점수나 비슷한 후보가 있으면 `확인 필요`로 남깁니다.
-
-각 표준 파라미터에서 다음을 최종 지정할 수 있습니다.
-
-- CSV 컬럼 또는 `사용하지 않음` 또는 `직접 입력`
-- 원본 단위
-- scale과 offset
-- 부호 반전
-
-`reference_altitude`에는 EKF와 비교할 Barometer 또는 GNSS 고도를 지정합니다. 기준 고도 출처는 `auto`, `barometer`, `gnss`, `other` 중 하나로 프로필에 저장되며, `auto`는 선택한 원본 컬럼 이름으로 출처를 판별합니다. Barometer와 GNSS 후보가 모두 있거나 자동 판별이 모호하면 사용자가 직접 컬럼과 출처를 선택해야 합니다.
-
-적용식은 다음과 같습니다.
+The configured transform is:
 
 ```text
 converted_value = sign × raw_value × scale + offset
 ```
 
-그 뒤 시간은 초, 고도는 미터로 변환됩니다. 실제 분석에는 자동 후보가 아니라 사용자가 `매핑 확정`한 설정만 사용됩니다.
+Time is then normalized to seconds and altitude to meters. A GNSS reference requires explicit attention to ellipsoid versus MSL datum; an automatically inferred source remains reviewable in the mapping profile.
 
-## 좌표계와 부호 주의사항
+## Metrics and Reports
 
-애플리케이션은 NED/ENU, FRD/FLU, 위/아래 양의 방향을 자동 확정하지 않습니다. `pos_d`와 `vel_d`는 Down 축일 수 있으므로 후보로는 보여도 자동 부호 반전하지 않습니다. 기체 정의를 확인한 뒤 사용자가 직접 `부호 반전`을 선택해야 합니다.
+The application renders metric cards, time-domain charts, PSD results, data-quality messages, and expandable hypothesis details. It exports:
 
-## 매핑 프로필
+- a Markdown diagnostic report;
+- structured JSON analysis;
+- the confirmed mapping profile as JSON;
+- a standalone HTML report.
 
-Step 2에서 현재 프로필을 JSON으로 다운로드하거나 과거 프로필을 업로드할 수 있습니다. 프로필에는 이름, 시간 단위, 좌표계, 기준 고도 출처, 헤더 해시, 컬럼·단위·scale·offset·부호 설정이 포함됩니다. 불러온 프로필의 컬럼이 현재 CSV에 없으면 경고하며, 같은 헤더 해시라면 일치 사실을 표시합니다. 기존 `barometer_altitude` 프로필은 불러올 때 `reference_altitude`와 `barometer` 출처로 자동 변환됩니다.
+Correlation and cross-correlation lag are presented with an explicit warning that they do not establish causality.
 
-## 분석 지표
-
-- 시간: sampling interval 평균·중앙값·표준편차, 주파수, jitter, 중복/역순 timestamp, dropout 후보
-- 고도: RMSE, MAE, 평균/표준편차/95 percentile/정상상태 오차와 유효한 경우에만 step-response 지표
-- 출력: throttle correction 포화, 양/음 포화, 연속 포화, 모터 평균·표준편차·spread·포화
-- 센서: 기준 고도-EKF bias·분산·Pearson correlation·cross-correlation lag 및 보조 상관
-- 주파수: 등간격 보간, detrend, Hann window, Welch PSD, 상위 peak와 Nyquist 정보
-
-상관관계와 cross-correlation lag는 인과관계를 증명하지 않는다는 경고가 보고서에 포함됩니다.
-
-## 규칙 기반 진단
-
-12개 가설에 대해 근거, 반대 근거, 누락 파라미터, 한계, 권장 실험과 각 점수 증감 규칙을 출력합니다. 예:
-
-```text
-진단 우선순위 점수: 82/100
-```
-
-이 점수는 발생 확률이 아닙니다. 현재 로그에서 규칙 근거를 검토할 순서를 정하기 위한 설명 가능한 우선순위 점수입니다. AI Provider가 추가한 가설은 별도의 `미검증 가설` 영역에만 표시됩니다.
-
-## 샘플 실행
-
-`sample_data/sample_alt_hold.csv`는 25 Hz, 0.3 Hz 고도 진동, AltHold 활성 구간과 약한 모터 출력 비대칭을 포함한 합성 로그입니다.
-
-1. 샘플 CSV 업로드
-2. 자동 추천을 검토하고 모든 필요한 매핑 선택
-3. 시간 단위 `seconds`, 고도 단위 `meters` 확인
-4. `매핑 확정`
-5. 자동 AltHold 구간 선택 후 `정량 분석 실행`
-
-Welch 분석의 주요 peak는 bin 해상도 범위에서 약 0.3 Hz로 검출되어야 합니다. 실제 수치는 선택 구간과 설정에 따라 달라집니다.
-
-## 테스트
+## Testing
 
 ```powershell
 python -m pytest
 ```
 
-테스트는 컬럼 정규화와 별칭/모터 매핑, 기준 고도, 사용자 변환, 시간 단위, timestamp 품질, 정량 지표, 규칙 점수, Provider별 설정 독립성, Base URL 정규화, atomic 설정 저장과 손상 백업, keyring·세션·환경변수 우선순위, 키 마스킹·교체·삭제, Provider Factory, 모델 목록 fallback, HTTP 오류 분류, 구조화 AI 응답과 원시 데이터 차단을 다룹니다. 실제 외부 AI API는 호출하지 않습니다.
+The pytest suite covers CSV parsing, aliases and canonical mapping, transforms and time units, timestamp quality, altitude/actuator/sensor/frequency metrics, rule scoring, reference-altitude behavior, bilingual output, provider-specific settings, URL normalization, atomic settings persistence, keyring fallback and deletion, client construction, error classification, structured AI responses, and raw-data rejection. External AI APIs are mocked.
 
-## 현재 한계
+The included sample log is synthetic: it provides known timing and frequency characteristics for checking the signal-processing implementation. Passing synthetic tests does **not** demonstrate real-world fault-diagnosis performance.
 
-- 펌웨어별 별칭 사전은 알려진 일반 이름을 중심으로 하며 새 형식은 수동 매핑이 필요합니다.
-- 자세, 배터리 전압, 적분기 내부 상태가 없으면 CG·추력·windup 원인을 완전히 분리할 수 없습니다.
-- step-response 지표는 명확하고 지속되는 단일 setpoint 변화가 있을 때만 보수적으로 계산합니다.
-- GNSS 기준 고도는 타원체/MSL 수직 datum과 위성 가시성에 따라 EKF와 일정한 오프셋 또는 노이즈 차이가 생길 수 있습니다.
-- 그래프 구간 선택은 Streamlit 슬라이더 기반이며 자유형 brush selection은 제공하지 않습니다.
-- 규칙 임계값은 초기 엔지니어링 기본값으로, 기체별 검증과 보정이 필요합니다.
-- OpenAI Compatible 서버는 `/v1/chat/completions`와 JSON 객체 응답을 제공해야 하며, `/v1/models` 지원은 선택 사항입니다.
-- 일부 모델이나 호환 서버는 temperature 또는 출력 토큰 옵션을 지원하지 않을 수 있으므로 연결 테스트에서 실제 설정을 확인해야 합니다.
-- OS keyring backend가 없는 환경에서는 API 키가 세션에만 유지됩니다.
+## Project Status and Validation Status
 
-## 향후 계획
+- **Current:** feature-rich engineering MVP
+- **Next milestone:** validated real-flight case study
+- **Long-term goal:** reusable evidence-based diagnosis workflow across airframes
 
-- 펌웨어별 검증된 alias/profile 라이브러리
-- 기체 설정별 규칙 threshold preset과 회귀 평가 데이터셋
-- attitude·battery·integrator 로그를 이용한 가설 분리 강화
-- interactive brush selection과 보고서 차트 내장
-- 반복 비행 간 비교 및 추세 분석
+The data pipeline, explainable mapping, deterministic metrics, rule evaluation, optional AI-provider integration, and report generation are implemented. However, diagnostic thresholds and root-cause rules have not yet been calibrated against a sufficiently large collection of real flights with independently verified fault labels.
+
+Current hypothesis scores must therefore be interpreted as transparent engineering priorities for further investigation, not as validated fault probabilities. The system evaluates possible causes, identifies supporting and opposing evidence, and recommends validation experiments; it does not claim to automatically determine the true root cause.
+
+Validation currently establishes that the software behaves consistently on unit tests and controlled synthetic signals. It does not yet establish sensitivity, specificity, or generalization across airframes. Thresholds require calibration for each vehicle, logging configuration, and operating envelope.
+
+## Current Limitations
+
+- Firmware aliases cover common names; unfamiliar formats require manual mapping.
+- Attitude, battery, current, vibration, and integrator-state omissions can prevent separation of CG, thrust, voltage, and windup hypotheses.
+- Automatic timestamp-unit inference is ambiguous at boundary sampling rates.
+- Step-response metrics use conservative definitions and are not yet robust to every step direction, missed target, or multi-step sequence.
+- Cross-correlation lag can be distorted by unequal sampling, repeated signals, and low-frequency trends; it is not causal evidence.
+- GNSS and EKF altitude may differ because of origin and ellipsoid/MSL datum choices.
+- Rule thresholds are engineering defaults and need per-airframe calibration against real, independently reviewed cases.
+- Segment selection uses Streamlit controls rather than free-form chart brushing.
+- Compatible servers vary in support for model listing, JSON output, temperature, and token-limit parameters.
+- The current HTML export wraps Markdown text in a styled `<pre>` block rather than rendering a full report layout with charts.
+- The Streamlit UI remains concentrated in a large `app.py`, and automated GitHub Actions are not configured yet.
+
+## Next Engineering Milestones
+
+### Priority 1. Timestamp Unit Inference
+
+The current interval-only heuristic can interpret a 1 Hz seconds log such as `0, 1, 2, 3, 4` as milliseconds. The next implementation should combine timestamp suffixes, absolute value scale, and sample interval; expose the inferred unit and confidence in the UI; and request user confirmation when confidence is low. Boundary tests must include 1 Hz and other low-frequency second-based logs.
+
+### Priority 2. Step-Response Metric Refinement
+
+- Separate rising and falling steps.
+- Prevent initial rising error from being counted as undershoot.
+- Define explicit pre-step and post-step steady-state windows.
+- Select the target transition explicitly when several setpoint changes exist.
+- Define behavior when the response never reaches the target.
+- Add synthetic rising, falling, missed-target, and multi-step response tests.
+
+### Priority 3. Cross-Correlation Reliability
+
+- Resample both signals onto the same time axis before comparison.
+- Detrend inputs and limit the maximum lag search window.
+- Require a minimum peak-correlation confidence.
+- Document the lag-sign convention.
+- Warn when periodic signals or low-frequency trends can create a false lag.
+- Validate against synthetic signals with known delay.
+
+### Priority 4. Boundary-Condition Test Expansion
+
+Add explicit coverage for 1 Hz seconds, milliseconds, microseconds, irregular sampling, duplicate and reversed timestamps, rising and falling steps, missed targets, multiple setpoint steps, constant signals, weak and multi-frequency vibration, known sensor delay, one CSV column mapped to multiple canonical parameters, partial motor columns, missing values, and short logs.
+
+### Priority 5. Dynamic OpenAI Model Discovery
+
+After key registration, query the official SDK or `/v1/models` and use models returned for the current account as the primary selection source. Preserve manual model entry when discovery fails, and avoid treating any bundled model ID as universally available so an outdated or unavailable default does not cause a first-run 404.
+
+### Priority 6. Real AltHold Case Study
+
+The next validation milestone is an end-to-end real-flight case study:
+
+```text
+real AltHold log
+  -> quantitative evidence
+  -> ranked rule-based hypotheses
+  -> comparison with an engineer's prior analysis
+  -> validation experiment
+  -> parameter or mechanical change
+  -> before/after RMSE, saturation, and vibration comparison
+```
+
+The study should publish flight conditions, logged parameters, mapping and coordinate frame, observed behavior, quantitative evidence, top hypotheses, experiments performed, before/after results, and cases where the analysis was wrong or uncertain. Until this exists, FlightLog Copilot should not be described as a validated automatic fault-diagnosis system.
+
+### Priority 7. UI Modularization and Report Improvement
+
+Split the large Streamlit entry point by workflow responsibility:
+
+```text
+src/flightlog_copilot/ui/
+├── ai_settings.py
+├── upload.py
+├── mapping.py
+├── segmentation.py
+├── metrics.py
+├── diagnosis.py
+└── reports.py
+```
+
+Replace the current `<pre>`-based HTML export with styled sections, metric cards, tables, per-hypothesis evidence and limitations, key charts, and a print/PDF-friendly layout.
+
+### Priority 8. Continuous Integration
+
+Add GitHub Actions for dependency installation, pytest, a basic import check, and optional lint/format checks on pull requests and pushes to `main`. Add a CI badge only after the workflow exists and passes successfully.
