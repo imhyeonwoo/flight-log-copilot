@@ -39,6 +39,7 @@ def test_sample_log_end_to_end_without_openai():
         "altitude_hold",
     )
     assert result["analysis_window"]["rows"] == 401
+    assert result["analysis_window"]["end_s"] - result["analysis_window"]["start_s"] == 16.0
     assert abs(result["metrics"]["frequency"]["dominant_frequency_hz"] - 0.3) < 0.04
     assert len(result["rule_based_hypotheses"]) == 12
     assert result["reference_altitude_source"] == "barometer"

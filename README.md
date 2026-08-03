@@ -229,7 +229,7 @@ Validation currently establishes that the software behaves consistently on unit 
 
 - Firmware aliases cover common names; unfamiliar formats require manual mapping.
 - Attitude, battery, current, vibration, and integrator-state omissions can prevent separation of CG, thrust, voltage, and windup hypotheses.
-- Automatic timestamp-unit inference is ambiguous at boundary sampling rates.
+- Value-only timestamp scales can be inherently ambiguous; mapping confirmation is blocked until the user selects a unit when neither the column name nor the values provide a unique high-confidence interpretation.
 - Step-response metrics use conservative definitions and are not yet robust to every step direction, missed target, or multi-step sequence.
 - Cross-correlation lag can be distorted by unequal sampling, repeated signals, and low-frequency trends; it is not causal evidence.
 - GNSS and EKF altitude may differ because of origin and ellipsoid/MSL datum choices.
@@ -241,9 +241,9 @@ Validation currently establishes that the software behaves consistently on unit 
 
 ## Next Engineering Milestones
 
-### Priority 1. Timestamp Unit Inference
+### Completed Foundation. Conservative Timestamp Unit Inference
 
-The current interval-only heuristic can interpret a 1 Hz seconds log such as `0, 1, 2, 3, 4` as milliseconds. The next implementation should combine timestamp suffixes, absolute value scale, and sample interval; expose the inferred unit and confidence in the UI; and request user confirmation when confidence is low. Boundary tests must include 1 Hz and other low-frequency second-based logs.
+Explicit user selection now has highest priority, followed by unit tokens in the source column name and then a conservative value-based check using sample count, interval, range, plausible sampling frequency, and duration. The mapping UI displays the inferred unit, confidence, and evidence. Ambiguous inputs such as a suffix-free `0, 1, 2, 3` timestamp are not converted or confirmed until the user selects seconds, milliseconds, or microseconds. Regression tests cover 1 Hz and other low-frequency second-based logs.
 
 ### Priority 2. Step-Response Metric Refinement
 

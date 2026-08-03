@@ -49,3 +49,10 @@ def test_corrupt_ai_settings_warning_is_translated_with_backup_name():
     translated = translate_text(warning, "en")
     assert "using default settings" in translated
     assert "ai_settings.json.corrupt-20260803-120000.bak" in translated
+
+
+def test_timestamp_unit_inference_reason_is_translated():
+    reason = "컬럼명 'timestamp_ms'의 단위 토큰 'ms'은 milliseconds를 명시합니다."
+    assert translate_text(reason, "en") == (
+        "Column 'timestamp_ms' has unit token 'ms', which specifies milliseconds."
+    )

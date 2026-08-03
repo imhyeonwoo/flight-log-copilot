@@ -36,6 +36,7 @@ from flightlog_copilot.llm.settings import (
 )
 from flightlog_copilot.mapping.detector import detect_mappings
 from flightlog_copilot.mapping.models import MappingProfile, ParameterMapping
+from flightlog_copilot.mapping.time_units import resolve_time_unit
 from flightlog_copilot.mapping.transformer import transform_frame
 from flightlog_copilot.preprocessing.segmentation import FlightSegment, detect_segments, select_time_range
 from flightlog_copilot.preprocessing.validation import validate_data
@@ -835,6 +836,43 @@ for parameter in STANDARD_PARAMETERS:
             invert_sign=bool(invert),
             confirmed=False,
         )
+
+if time_unit == "auto":
+    timestamp_mapping = mappings.get("timestamp")
+    if timestamp_mapping and timestamp_mapping.column in raw_frame.columns:
+        timestamp_values = pd.to_numeric(raw_frame[timestamp_mapping.column], errors="coerce")
+        timestamp_values = (
+            (-1.0 if timestamp_mapping.invert_sign else 1.0)
+            * timestamp_values
+            * float(timestamp_mapping.scale)
+            + float(timestamp_mapping.offset)
+        )
+        time_inference = resolve_time_unit(
+            timestamp_values,
+            timestamp_mapping.column,
+            selected_time_unit=time_unit,
+            mapping_unit=timestamp_mapping.unit,
+        )
+        confidence_label = (
+            _t("높음", "High")
+            if time_inference.confidence >= 0.8
+            else _t("중간", "Medium")
+            if time_inference.confidence >= 0.6
+            else _t("낮음", "Low")
+        )
+        reason_text = "; ".join(_tx(reason) for reason in time_inference.reasons)
+        if time_inference.requires_confirmation or time_inference.unit is None:
+            mapping_errors.append(_t(
+                "시간 단위를 자동으로 확정할 수 없습니다. seconds, milliseconds, microseconds 중 하나를 직접 선택하십시오.",
+                "The timestamp unit cannot be confirmed automatically. Select seconds, milliseconds, or microseconds manually.",
+            ) + f"\n\n{_t('신뢰도', 'Confidence')}: {confidence_label} ({time_inference.confidence:.2f})"
+            + f"\n\n{_t('근거', 'Reason')}: {reason_text}")
+        else:
+            st.info(
+                f"{_t('추정 시간 단위', 'Inferred timestamp unit')}: {time_inference.unit}"
+                f"\n\n{_t('신뢰도', 'Confidence')}: {confidence_label} ({time_inference.confidence:.2f})"
+                f"\n\n{_t('근거', 'Reason')}: {reason_text}"
+            )
 
 if coordinate_frame == "확인 필요":
     st.info(_t(
