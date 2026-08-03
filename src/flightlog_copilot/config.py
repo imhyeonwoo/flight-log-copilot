@@ -7,7 +7,7 @@ STANDARD_PARAMETERS = (
     "timestamp",
     "altitude_setpoint",
     "ekf_altitude",
-    "barometer_altitude",
+    "reference_altitude",
     "vertical_velocity",
     "throttle_base",
     "throttle_correction",
@@ -21,14 +21,14 @@ STANDARD_PARAMETERS = (
 
 MINIMUM_REQUIRED = {"timestamp", "ekf_altitude"}
 ALTHOLD_PARAMETERS = {"altitude_setpoint", "throttle_correction", "althold_active"}
-BAROMETER_PARAMETERS = {"barometer_altitude"}
+REFERENCE_PARAMETERS = {"reference_altitude"}
 MOTOR_PARAMETERS = {"motor_1", "motor_2", "motor_3", "motor_4"}
 
 PARAMETER_GROUP = {
     "timestamp": "time",
     "altitude_setpoint": "altitude",
     "ekf_altitude": "altitude",
-    "barometer_altitude": "altitude",
+    "reference_altitude": "altitude",
     "vertical_velocity": "velocity",
     "throttle_base": "pwm",
     "throttle_correction": "pwm",

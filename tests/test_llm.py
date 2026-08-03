@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
+from flightlog_copilot.engine import build_llm_payload
 from flightlog_copilot.llm.client import LLMAnalysisError, analyze_with_openai
 from flightlog_copilot.llm.schemas import CopilotResponse
 
@@ -54,5 +55,9 @@ def test_client_parses_mocked_structured_response():
     class Client:
         responses = Responses()
 
-    result = analyze_with_openai({"features": {"rmse": 0.2}}, client=Client(), model="test-model")
+    payload = build_llm_payload({
+        "analysis_window": {"start_s": 0.0, "end_s": 10.0, "rows": 401},
+        "metrics": {"altitude": {"rmse_m": 0.2}},
+    })
+    result = analyze_with_openai(payload, client=Client(), model="test-model")
     assert result["summary"].startswith("정량")

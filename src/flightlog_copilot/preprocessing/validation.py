@@ -77,8 +77,13 @@ def validate_data(
         messages.append(ValidationMessage("warning", "infinite_values", f"무한대 값 {infinite}개가 있습니다."))
     if "ekf_altitude" not in canonical:
         messages.append(ValidationMessage("error", "missing_ekf", "ekf_altitude가 없어 최소 고도 분석을 수행할 수 없습니다.", "ekf_altitude"))
-    if "barometer_altitude" not in canonical:
-        messages.append(ValidationMessage("warning", "missing_barometer", "barometer_altitude가 없어 Barometer-EKF 비교를 생략합니다.", "barometer_altitude"))
+    if "reference_altitude" not in canonical:
+        messages.append(ValidationMessage(
+            "warning",
+            "missing_reference_altitude",
+            "reference_altitude가 없어 기준 고도-EKF 비교를 생략합니다.",
+            "reference_altitude",
+        ))
     if not MOTOR_PARAMETERS.issubset(canonical.columns):
         messages.append(ValidationMessage("info", "missing_motors", "motor_1~motor_4가 모두 없어 모터 불균형 분석을 일부 또는 전부 생략합니다."))
     for parameter in ("armed", "althold_active"):

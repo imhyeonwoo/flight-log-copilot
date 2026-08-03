@@ -26,3 +26,5 @@ def test_missing_parameters_do_not_crash_rules():
     motor = _find(results, "motor_propeller_imbalance")
     assert motor["score"] == 0
     assert set(motor["missing_parameters"]) == {"motor_1", "motor_2", "motor_3", "motor_4"}
+    reference = _find(results, "reference_ekf_bias")
+    assert set(reference["missing_parameters"]) == {"reference_altitude", "ekf_altitude"}

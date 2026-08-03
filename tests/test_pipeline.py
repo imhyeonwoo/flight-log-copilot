@@ -41,9 +41,19 @@ def test_sample_log_end_to_end_without_openai():
     assert result["analysis_window"]["rows"] == 401
     assert abs(result["metrics"]["frequency"]["dominant_frequency_hz"] - 0.3) < 0.04
     assert len(result["rule_based_hypotheses"]) == 12
+    assert result["reference_altitude_source"] == "barometer"
+    assert result["metrics"]["sensor_comparison"]["available"] is True
+    assert "reference_ekf_bias_m" in result["metrics"]["sensor_comparison"]
     payload = build_llm_payload(result)
+    assert payload["analysis_window"] == {
+        "start_s": result["analysis_window"]["start_s"],
+        "end_s": result["analysis_window"]["end_s"],
+        "row_count": 401,
+    }
+    assert "rows" not in payload["analysis_window"]
     assert set(payload) == {
         "flight_phase",
+        "reference_altitude_source",
         "analysis_window",
         "parameter_mapping",
         "features",

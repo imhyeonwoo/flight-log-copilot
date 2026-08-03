@@ -4,13 +4,20 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from typing import Optional
 
 
 ALIASES = {
     "timestamp": ["timestamp", "time", "t", "time_s", "elapsed_time", "timestamp_ms", "timestamp_us", "tick"],
     "altitude_setpoint": ["altitude_setpoint", "alt_sp", "altitude_sp", "height_setpoint", "target_altitude", "z_setpoint"],
     "ekf_altitude": ["ekf_altitude", "ekf_alt", "estimated_altitude", "height_estimate", "altitude_estimate", "pos_d", "position_d"],
-    "barometer_altitude": ["barometer_altitude", "baro_alt", "baro_altitude", "bmp_altitude", "pressure_altitude"],
+    "reference_altitude": [
+        "reference_altitude", "reference_alt", "comparison_altitude",
+        "barometer_altitude", "baro_alt", "baro_altitude", "bmp_altitude", "pressure_altitude",
+        "gnss_altitude", "gnss_alt", "gnss_alt_msl", "gnss_height",
+        "gps_altitude", "gps_alt", "gps_alt_msl", "gps_height", "global_altitude",
+        "vehicle_gps_altitude", "vehicle_gps_position_alt",
+    ],
     "vertical_velocity": ["vertical_velocity", "vertical_speed", "vz", "vel_z", "vel_d", "velocity_d"],
     "throttle_base": ["throttle_base", "base_throttle", "base_pwm", "hover_pwm"],
     "throttle_correction": ["throttle_correction", "throttle_corr", "alt_corr", "altitude_correction", "z_correction"],
@@ -53,3 +60,32 @@ NORMALIZED_ALIASES = {
     parameter: {normalize_column_name(alias) for alias in aliases}
     for parameter, aliases in ALIASES.items()
 }
+
+REFERENCE_SOURCE_ALIASES = {
+    "barometer": {normalize_column_name(alias) for alias in (
+        "barometer_altitude", "baro_alt", "baro_altitude", "bmp_altitude", "pressure_altitude",
+    )},
+    "gnss": {normalize_column_name(alias) for alias in (
+        "gnss_altitude", "gnss_alt", "gnss_alt_msl", "gnss_height",
+        "gps_altitude", "gps_alt", "gps_alt_msl", "gps_height", "global_altitude",
+        "vehicle_gps_altitude", "vehicle_gps_position_alt",
+    )},
+}
+
+
+def infer_reference_altitude_source(column: Optional[str]) -> str:
+    """Infer reference sensor type from a selected raw-column name."""
+    if not column:
+        return "other"
+    normalized = normalize_column_name(column)
+    for source, aliases in REFERENCE_SOURCE_ALIASES.items():
+        if normalized in aliases:
+            return source
+    return "other"
+
+
+def resolve_reference_altitude_source(configured_source: str, column: Optional[str]) -> str:
+    """Resolve an explicit source choice or infer it when the profile uses auto."""
+    if configured_source in {"barometer", "gnss", "other"}:
+        return configured_source
+    return infer_reference_altitude_source(column)

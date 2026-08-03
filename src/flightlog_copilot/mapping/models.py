@@ -61,6 +61,7 @@ class MappingProfile:
     profile_name: str = "Untitled profile"
     time_unit: str = "auto"
     coordinate_frame: str = "확인 필요"
+    reference_altitude_source: str = "auto"
     header_hash: str = ""
     parameters: Dict[str, ParameterMapping] = field(default_factory=dict)
 
@@ -69,6 +70,7 @@ class MappingProfile:
             "profile_name": self.profile_name,
             "time_unit": self.time_unit,
             "coordinate_frame": self.coordinate_frame,
+            "reference_altitude_source": self.reference_altitude_source,
             "header_hash": self.header_hash,
             "parameters": {name: mapping.to_dict() for name, mapping in self.parameters.items()},
         }
@@ -77,20 +79,33 @@ class MappingProfile:
     def from_dict(cls, payload: Dict[str, Any]) -> "MappingProfile":
         if not isinstance(payload, dict) or not isinstance(payload.get("parameters", {}), dict):
             raise ValueError("매핑 프로필에 parameters 객체가 필요합니다.")
-        unknown = set(payload.get("parameters", {})) - set(STANDARD_PARAMETERS)
+        parameters = dict(payload.get("parameters", {}))
+        has_legacy_barometer = "barometer_altitude" in parameters
+        legacy_barometer = parameters.pop("barometer_altitude", None)
+        migrated_legacy_barometer = has_legacy_barometer and "reference_altitude" not in parameters
+        if migrated_legacy_barometer:
+            parameters["reference_altitude"] = legacy_barometer
+        unknown = set(parameters) - set(STANDARD_PARAMETERS)
         if unknown:
             raise ValueError("알 수 없는 표준 파라미터: " + ", ".join(sorted(unknown)))
         time_unit = str(payload.get("time_unit", "auto"))
         if time_unit not in {"auto", "seconds", "milliseconds", "microseconds"}:
             raise ValueError("time_unit은 auto, seconds, milliseconds, microseconds 중 하나여야 합니다.")
+        reference_source = str(payload.get(
+            "reference_altitude_source",
+            "barometer" if migrated_legacy_barometer else "auto",
+        ))
+        if reference_source not in {"auto", "barometer", "gnss", "other"}:
+            raise ValueError("reference_altitude_source는 auto, barometer, gnss, other 중 하나여야 합니다.")
         return cls(
             profile_name=str(payload.get("profile_name", "Imported profile")),
             time_unit=time_unit,
             coordinate_frame=str(payload.get("coordinate_frame", "확인 필요")),
+            reference_altitude_source=reference_source,
             header_hash=str(payload.get("header_hash", "")),
             parameters={
                 name: ParameterMapping.from_dict(value)
-                for name, value in payload.get("parameters", {}).items()
+                for name, value in parameters.items()
             },
         )
 

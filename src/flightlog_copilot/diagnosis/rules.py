@@ -22,8 +22,8 @@ def evaluate_hypotheses(metrics: Dict[str, Any], available_parameters: Iterable[
     _score_i_gain(hypotheses["altitude_i_gain_high"], altitude, actuator, frequency)
     _score_windup(hypotheses["integrator_windup"], altitude, actuator)
     _score_saturation(hypotheses["throttle_correction_saturation"], actuator)
-    _score_propwash(hypotheses["barometer_propwash_vibration"], sensor, frequency)
-    _score_bias(hypotheses["barometer_ekf_bias"], sensor)
+    _score_reference_noise(hypotheses["reference_sensor_noise_or_vibration"], sensor, frequency)
+    _score_bias(hypotheses["reference_ekf_bias"], sensor)
     _score_delay(hypotheses["sensor_control_delay"], sensor)
     _score_task(hypotheses["task_period_instability"], timing)
     _score_timestamp(hypotheses["timestamp_logging_problem"], timing)
@@ -82,21 +82,22 @@ def _score_saturation(h: Dict[str, Any], actuator: Dict[str, Any]) -> None:
     apply_rule(h, None if ratio is None else ratio >= 0.05, 70, "correction limit 도달", f"correction 포화 비율이 {(ratio or 0) * 100:.1f}%입니다.", "correction 포화가 거의 없습니다.", ratio, ">= 0.05")
 
 
-def _score_propwash(h: Dict[str, Any], sensor: Dict[str, Any], frequency: Dict[str, Any]) -> None:
+def _score_reference_noise(h: Dict[str, Any], sensor: Dict[str, Any], frequency: Dict[str, Any]) -> None:
     difference_std = _value(sensor, "difference_std_m")
     motor_corr = _value(sensor, "mean_motor_pwm_vs_abs_error_correlation")
     dominant = _value(frequency, "dominant_frequency_hz")
-    apply_rule(h, None if difference_std is None else difference_std >= 0.15, 30, "Barometer-EKF 차이 변동", f"센서 차이 표준편차가 {difference_std or 0:.3f} m입니다.", "센서 차이 변동이 작습니다.", difference_std, ">= 0.15 m")
+    apply_rule(h, None if difference_std is None else difference_std >= 0.15, 30, "기준 고도-EKF 차이 변동", f"센서 차이 표준편차가 {difference_std or 0:.3f} m입니다.", "센서 차이 변동이 작습니다.", difference_std, ">= 0.15 m")
     apply_rule(h, None if motor_corr is None else motor_corr >= 0.35, 35, "모터 출력과 센서 오차 상관", f"평균 motor PWM과 절대 센서 오차의 상관계수가 {motor_corr or 0:.2f}입니다.", "모터 출력과 센서 오차의 상관이 약합니다.", motor_corr, ">= 0.35")
     apply_rule(h, None if dominant is None else dominant >= 1.0, 15, "진동 대역 peak", f"주요 진동 주파수는 {dominant or 0:.2f} Hz입니다.", "고주파 진동 peak 근거가 약합니다.", dominant, ">= 1 Hz")
 
 
 def _score_bias(h: Dict[str, Any], sensor: Dict[str, Any]) -> None:
-    bias = _value(sensor, "barometer_ekf_bias_m")
+    bias = _value(sensor, "reference_ekf_bias_m")
     spread = _value(sensor, "difference_std_m")
-    apply_rule(h, None if bias is None else abs(bias) >= 0.2, 55, "평균 센서 bias", f"Barometer-EKF 평균 bias가 {bias or 0:.3f} m입니다.", "평균 센서 bias가 작습니다.", bias, ">= 0.2 m absolute")
+    apply_rule(h, None if bias is None else abs(bias) >= 0.2, 55, "평균 센서 bias", f"기준 고도-EKF 평균 bias가 {bias or 0:.3f} m입니다.", "평균 센서 bias가 작습니다.", bias, ">= 0.2 m absolute")
     stable_bias = None if bias is None or spread is None else abs(bias) >= 0.2 and spread < abs(bias)
     apply_rule(h, stable_bias, 20, "변동 대비 지속 bias", "bias가 차이의 변동보다 커서 지속 오프셋 형태입니다.", "bias가 변동에 비해 지배적이지 않습니다.", spread, "std < abs(bias)")
+    h["limitations"].append("기준 고도의 원점 또는 수직 datum 차이도 지속 bias를 만들 수 있습니다.")
 
 
 def _score_delay(h: Dict[str, Any], sensor: Dict[str, Any]) -> None:

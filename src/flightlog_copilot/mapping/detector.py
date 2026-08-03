@@ -134,9 +134,9 @@ def _relationship_bonus(parameter: str, frame: pd.DataFrame) -> float:
         )
         return 0.02 if recognized >= 2 else 0.0
     related = {
-        "altitude_setpoint": {"ekf_altitude", "barometer_altitude"},
-        "ekf_altitude": {"altitude_setpoint", "barometer_altitude"},
-        "barometer_altitude": {"ekf_altitude"},
+        "altitude_setpoint": {"ekf_altitude", "reference_altitude"},
+        "ekf_altitude": {"altitude_setpoint", "reference_altitude"},
+        "reference_altitude": {"ekf_altitude"},
         "armed": {"althold_active"},
         "althold_active": {"armed"},
     }.get(parameter, set())

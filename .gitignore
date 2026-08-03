@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 .venv/
 __pycache__/
 *.py[cod]
@@ -6,3 +8,5 @@ __pycache__/
 .coverage
 htmlcov/
 .streamlit/secrets.toml
+credentials.json
+ai_settings.local.json

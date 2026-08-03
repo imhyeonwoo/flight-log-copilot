@@ -58,7 +58,7 @@ def _convert_unit(parameter: str, values: pd.Series, unit: str, profile_time_uni
             chosen = infer_time_unit(values)
         factor = {"seconds": 1.0, "milliseconds": 1e-3, "microseconds": 1e-6}.get(chosen, 1.0)
         return values * factor
-    if parameter in {"altitude_setpoint", "ekf_altitude", "barometer_altitude"}:
+    if parameter in {"altitude_setpoint", "ekf_altitude", "reference_altitude"}:
         factor = {"meters": 1.0, "centimeters": 1e-2, "millimeters": 1e-3}.get(unit, 1.0)
         return values * factor
     if parameter == "vertical_velocity":

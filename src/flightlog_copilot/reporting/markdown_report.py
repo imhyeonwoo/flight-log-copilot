@@ -20,6 +20,7 @@ def render_markdown_report(result: Dict[str, Any], language: str = "ko") -> str:
         "## Analysis Window" if english else "## 분석 구간",
         "",
         f"- {'Flight phase' if english else '비행 구간'}: {result.get('flight_phase', 'unknown')}",
+        f"- {'Reference altitude source' if english else '기준 고도 출처'}: {result.get('reference_altitude_source', 'other')}",
         f"- {'Start' if english else '시작'}: {_format(window.get('start_s'), language)} s",
         f"- {'End' if english else '종료'}: {_format(window.get('end_s'), language)} s",
         f"- {'Analysis rows' if english else '분석 행 수'}: {window.get('rows', 0)}",
@@ -77,7 +78,7 @@ def render_markdown_report(result: Dict[str, Any], language: str = "ko") -> str:
         lines.extend(["## AI Copilot", "", str(ai.get("summary", "")), ""])
         if ai.get("additional_hypotheses"):
             lines.extend([
-                "### Unverified hypotheses additionally suggested by GPT" if english else "### GPT가 추가로 제안한 미검증 가설",
+                "### Unverified hypotheses additionally suggested by the AI provider" if english else "### AI Provider가 추가로 제안한 미검증 가설",
                 "",
                 "> The items below were not verified by the rule-based engine." if english else "> 아래 항목은 규칙 기반으로 검증되지 않았습니다.",
                 "",
