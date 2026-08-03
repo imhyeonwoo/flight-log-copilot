@@ -586,6 +586,64 @@ def _render_metrics(result: dict, frame: pd.DataFrame) -> None:
             st.caption(_tx(altitude["dynamic_metrics_reason"]))
         st.json(localize_values(altitude, _language()))
         st.markdown(f"**{_t('기준 고도-EKF 비교', 'Reference-altitude/EKF comparison')}**")
+        if sensor.get("available"):
+            lag = sensor.get("estimated_lag_s")
+            lag_confidence = sensor.get("lag_confidence", "unavailable")
+            unavailable_label = _t("계산 불가", "Unavailable")
+            lag_display = unavailable_label if lag is None else f"{lag:+.3f} s"
+            maximum_correlation = sensor.get("max_cross_correlation")
+            correlation_display = (
+                unavailable_label
+                if maximum_correlation is None
+                else f"{maximum_correlation:.3f}"
+            )
+            search_limit = sensor.get("lag_search_limit_s")
+            search_display = unavailable_label if search_limit is None else f"±{search_limit:.3f} s"
+            peak_separation = sensor.get("correlation_peak_separation")
+            peak_separation_display = (
+                unavailable_label
+                if peak_separation is None
+                else f"{peak_separation:.3f}"
+            )
+            confidence_label = {
+                "high": _t("높음", "High"),
+                "medium": _t("중간", "Medium"),
+                "low": _t("낮음", "Low"),
+                "unavailable": unavailable_label,
+            }.get(lag_confidence, str(lag_confidence))
+            lag_cards = st.columns(5)
+            lag_cards[0].metric(_t("추정 상대 지연", "Estimated relative lag"), lag_display)
+            lag_cards[1].metric(
+                _t("최대 상관", "Maximum correlation"),
+                correlation_display,
+            )
+            lag_cards[2].metric(_t("신뢰도", "Confidence"), confidence_label)
+            lag_cards[3].metric(
+                _t("진단 점수 사용", "Used for diagnosis"),
+                _t("예", "Yes") if sensor.get("lag_reliable") else _t("아니요", "No"),
+            )
+            lag_cards[4].metric(
+                _t("검색 범위", "Search range"),
+                search_display,
+            )
+            if lag is None:
+                interpretation = _t("상대 지연을 해석할 수 없음", "Relative lag is unavailable")
+            elif lag > 0:
+                interpretation = _t("기준 고도가 EKF보다 늦음", "Reference altitude lags EKF")
+            elif lag < 0:
+                interpretation = _t("기준 고도가 EKF보다 빠름", "Reference altitude leads EKF")
+            else:
+                interpretation = _t("검출 가능한 상대 지연 없음", "No detectable relative lag")
+            st.caption(
+                f"{_t('부호 해석', 'Sign interpretation')}: {interpretation} · "
+                f"{_t('Peak 분리도', 'Peak separation')}: "
+                f"{peak_separation_display} · "
+                f"{_t('경계 Peak', 'Boundary peak')}: "
+                f"{_t('예', 'Yes') if sensor.get('lag_at_search_boundary') else _t('아니요', 'No')}"
+            )
+            if not sensor.get("lag_reliable"):
+                st.warning(_tx(sensor.get("lag_reason") or "지연 후보의 신뢰도가 부족합니다."))
+            st.info(_tx(sensor.get("caveat", "상관관계와 cross-correlation lag는 인과관계를 증명하지 않습니다.")))
         st.json(localize_values(sensor, _language()))
     with tab_output:
         columns = [name for name in ("throttle_base", "throttle_correction", "motor_1", "motor_2", "motor_3", "motor_4") if name in frame]

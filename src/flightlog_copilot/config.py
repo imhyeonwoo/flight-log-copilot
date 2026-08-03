@@ -1,6 +1,6 @@
 """Application-wide defaults and canonical parameter metadata."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 STANDARD_PARAMETERS = (
@@ -50,6 +50,21 @@ DEFAULT_UNITS = {
 
 
 @dataclass(frozen=True)
+class SensorComparisonSettings:
+    max_lag_s: float = 2.0
+    minimum_correlation: float = 0.5
+    minimum_peak_separation: float = 0.05
+    minimum_overlap_samples: int = 20
+    minimum_overlap_ratio: float = 0.3
+    maximum_interpolation_gap_multiplier: float = 3.0
+    minimum_signal_std: float = 1e-6
+    boundary_tolerance_samples: int = 1
+    peak_guard_band_samples: int = 2
+    high_confidence_correlation: float = 0.7
+    high_confidence_peak_separation: float = 0.1
+
+
+@dataclass(frozen=True)
 class AnalysisSettings:
     correction_limit: float = 160.0
     motor_pwm_min: float = 1000.0
@@ -58,3 +73,4 @@ class AnalysisSettings:
     minimum_rows: int = 20
     steady_state_fraction: float = 0.2
     settling_tolerance_fraction: float = 0.05
+    sensor_comparison: SensorComparisonSettings = field(default_factory=SensorComparisonSettings)

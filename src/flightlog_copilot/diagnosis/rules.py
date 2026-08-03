@@ -103,6 +103,14 @@ def _score_bias(h: Dict[str, Any], sensor: Dict[str, Any]) -> None:
 def _score_delay(h: Dict[str, Any], sensor: Dict[str, Any]) -> None:
     lag = _value(sensor, "estimated_lag_s")
     correlation = _value(sensor, "max_cross_correlation")
+    if sensor.get("lag_reliable") is not True:
+        apply_rule(h, None, 50, "cross-correlation lag", "", observed=lag, threshold=">= 0.1 s absolute")
+        apply_rule(h, None, 15, "lag 추정 일관성", "", observed=correlation, threshold=">= 0.5")
+        h["limitations"].append(
+            "Cross-correlation lag가 신뢰되지 않아 지연 가설 점수에 사용하지 않았습니다."
+        )
+        h["limitations"].append("cross-correlation lag는 공통 입력과 필터 특성의 영향도 받습니다.")
+        return
     apply_rule(h, None if lag is None else abs(lag) >= 0.1, 50, "cross-correlation lag", f"추정 lag 절댓값이 {abs(lag or 0):.3f}초입니다.", "추정 lag가 작습니다.", lag, ">= 0.1 s absolute")
     apply_rule(h, None if correlation is None else correlation >= 0.5, 15, "lag 추정 일관성", f"최대 cross-correlation이 {correlation or 0:.2f}입니다.", "cross-correlation이 약해 lag 해석이 제한됩니다.", correlation, ">= 0.5")
     h["limitations"].append("cross-correlation lag는 공통 입력과 필터 특성의 영향도 받습니다.")

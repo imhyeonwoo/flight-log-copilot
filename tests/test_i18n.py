@@ -63,3 +63,10 @@ def test_step_response_failure_reason_is_translated():
     assert translate_text(reason, "en") == (
         "The response did not reach the 90% step-amplitude threshold."
     )
+
+
+def test_cross_correlation_reliability_reason_is_translated():
+    reason = "비슷한 correlation peak가 반복되어 지연 후보가 모호합니다."
+    assert translate_text(reason, "en") == (
+        "Repeated similar correlation peaks make the lag candidate ambiguous."
+    )

@@ -36,7 +36,11 @@ def run_deterministic_analysis(
         "timing": analyze_timing(full_frame, analysis_frame, settings.dropout_multiplier),
         "altitude": analyze_altitude_tracking(analysis_frame, settings.steady_state_fraction, settings.settling_tolerance_fraction),
         "actuator": analyze_actuators(analysis_frame, settings.correction_limit, settings.motor_pwm_min, settings.motor_pwm_max),
-        "sensor_comparison": analyze_sensor_comparison(analysis_frame, resolved_reference_source),
+        "sensor_comparison": analyze_sensor_comparison(
+            analysis_frame,
+            resolved_reference_source,
+            settings.sensor_comparison,
+        ),
         "frequency": analyze_frequency(analysis_frame),
     }
     hypotheses = evaluate_hypotheses(metrics, analysis_frame.columns)

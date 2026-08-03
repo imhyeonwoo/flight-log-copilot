@@ -28,3 +28,37 @@ def test_missing_parameters_do_not_crash_rules():
     assert set(motor["missing_parameters"]) == {"motor_1", "motor_2", "motor_3", "motor_4"}
     reference = _find(results, "reference_ekf_bias")
     assert set(reference["missing_parameters"]) == {"reference_altitude", "ekf_altitude"}
+
+
+def test_unreliable_lag_does_not_raise_sensor_delay_score():
+    sensor = {
+        "available": True,
+        "estimated_lag_s": 0.4,
+        "max_cross_correlation": 0.95,
+        "lag_reliable": False,
+        "lag_reason": "비슷한 correlation peak가 반복되어 지연 후보가 모호합니다.",
+    }
+    results = evaluate_hypotheses(
+        {"sensor_comparison": sensor},
+        {"timestamp", "reference_altitude", "ekf_altitude"},
+    )
+    delay = _find(results, "sensor_control_delay")
+    assert delay["score"] == 0
+    assert all(detail["delta"] == 0 for detail in delay["score_details"])
+    assert any("사용하지 않았" in limitation for limitation in delay["limitations"])
+
+
+def test_reliable_lag_preserves_existing_delay_rule_thresholds():
+    sensor = {
+        "available": True,
+        "estimated_lag_s": 0.4,
+        "max_cross_correlation": 0.95,
+        "lag_reliable": True,
+    }
+    results = evaluate_hypotheses(
+        {"sensor_comparison": sensor},
+        {"timestamp", "reference_altitude", "ekf_altitude"},
+    )
+    delay = _find(results, "sensor_control_delay")
+    assert delay["score"] == 65
+    assert [detail["delta"] for detail in delay["score_details"]] == [50, 15]

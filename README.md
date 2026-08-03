@@ -82,7 +82,7 @@ After mapping confirmation and flight-segment selection, the local Python engine
 - altitude RMSE, MAE, error distribution, steady-state error, and conservative step-response metrics;
 - sampling interval, estimated frequency, jitter, duplicate/reversed timestamps, and dropout candidates;
 - throttle-correction and motor-output saturation, duration, spread, and variability;
-- reference-altitude versus EKF bias, dispersion, Pearson correlation, and cross-correlation lag;
+- reference-altitude versus EKF bias, dispersion, Pearson correlation, and reliability-qualified cross-correlation lag;
 - detrended, windowed Welch PSD and dominant vibration frequencies.
 
 Missing optional parameters disable only the affected calculation and are reported as unavailable; they do not stop the full workflow. All baseline analysis, rule evaluation, charts, and reports work without an AI call.
@@ -201,7 +201,7 @@ The application renders metric cards, time-domain charts, PSD results, data-qual
 - the confirmed mapping profile as JSON;
 - a standalone HTML report.
 
-Correlation and cross-correlation lag are presented with an explicit warning that they do not establish causality.
+For lag analysis, common valid samples are sorted and duplicate timestamps are averaged, large gaps split the record, and the longest contiguous segment is linearly resampled at its median interval. Both signals are linearly detrended, centered, and normalized before per-lag overlap correlation is evaluated within the smaller of the configured 2-second range and 25% of the usable duration. Reliability defaults require correlation `>= 0.5`, peak separation `>= 0.05`, and overlap of at least 20 samples and 30% of the resampled record; gaps above 3 median intervals are not bridged, detrended standard deviation must be at least `1e-6 m`, and a peak within one sample of the search boundary is rejected. High confidence additionally requires correlation `>= 0.7` and peak separation `>= 0.1` when a competing peak exists. Positive lag means `reference_altitude` changes later than `ekf_altitude`. Weak, repeated, boundary, low-overlap, or sign-inverted peaks are reported as unreliable and are not used to increase the delay-hypothesis score. Correlation and lag do not establish causality.
 
 ## Testing
 
@@ -231,7 +231,7 @@ Validation currently establishes that the software behaves consistently on unit 
 - Attitude, battery, current, vibration, and integrator-state omissions can prevent separation of CG, thrust, voltage, and windup hypotheses.
 - Value-only timestamp scales can be inherently ambiguous; mapping confirmation is blocked until the user selects a unit when neither the column name nor the values provide a unique high-confidence interpretation.
 - Step-response metrics require clear pre/post setpoint plateaus, valid strictly increasing timestamps, and enough time to satisfy the settling dwell condition; ramps, short windows, and closely spaced transitions may remain unavailable by design.
-- Cross-correlation lag can be distorted by unequal sampling, repeated signals, and low-frequency trends; it is not causal evidence.
+- Cross-correlation can still reflect common inputs, filter characteristics, periodic ambiguity, and hardware timestamp synchronization error; it cannot by itself separate sensor delay from EKF filter delay and is not causal evidence.
 - GNSS and EKF altitude may differ because of origin and ellipsoid/MSL datum choices.
 - Rule thresholds are engineering defaults and need per-airframe calibration against real, independently reviewed cases.
 - Segment selection uses Streamlit controls rather than free-form chart brushing.
@@ -249,14 +249,9 @@ Explicit user selection now has highest priority, followed by unit tokens in the
 
 Rising and falling setpoint events are now detected from stable pre/post plateau medians, and adjacent fast changes are merged while continuous ramps are rejected. Each event is analyzed only until the next transition. Rise time uses interpolated 10–90% crossings; overshoot is measured beyond the final target; undershoot is limited to wrong-way motion before the 10% crossing; and settling requires a continuous 0.5-second dwell inside the configured relative or absolute tolerance. Missed targets and insufficient windows return explicit unavailable states rather than misleading numbers. Synthetic tests cover both directions, multiple steps, ramps, overshoot, undershoot, missed targets, irregular timestamps, and settling dwell behavior.
 
-### Priority 3. Cross-Correlation Reliability
+### Completed Foundation. Reliability-Qualified Cross-Correlation
 
-- Resample both signals onto the same time axis before comparison.
-- Detrend inputs and limit the maximum lag search window.
-- Require a minimum peak-correlation confidence.
-- Document the lag-sign convention.
-- Warn when periodic signals or low-frequency trends can create a false lag.
-- Validate against synthetic signals with known delay.
+The reference-altitude and EKF signals are compared on one uniform timebase without interpolating across detected large gaps. Lag candidates use detrended and normalized signals, a bounded search range, per-lag overlap normalization, peak separation, boundary, overlap, low-variance, and sign-mismatch checks. Results include explicit reliability and confidence fields, and only reliable lag estimates can affect the delay-hypothesis score. Synthetic tests cover zero, positive, and negative delay, jitter, trend and offset, dropout, weak and constant signals, repeated periodic peaks, search boundaries, and sign inversion. Remaining limits include common-input and filter effects, periodic ambiguity, hardware timestamp synchronization, and inability to isolate sensor delay from EKF filter delay using these two signals alone.
 
 ### Priority 4. Boundary-Condition Test Expansion
 
