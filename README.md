@@ -230,7 +230,7 @@ Validation currently establishes that the software behaves consistently on unit 
 - Firmware aliases cover common names; unfamiliar formats require manual mapping.
 - Attitude, battery, current, vibration, and integrator-state omissions can prevent separation of CG, thrust, voltage, and windup hypotheses.
 - Value-only timestamp scales can be inherently ambiguous; mapping confirmation is blocked until the user selects a unit when neither the column name nor the values provide a unique high-confidence interpretation.
-- Step-response metrics use conservative definitions and are not yet robust to every step direction, missed target, or multi-step sequence.
+- Step-response metrics require clear pre/post setpoint plateaus, valid strictly increasing timestamps, and enough time to satisfy the settling dwell condition; ramps, short windows, and closely spaced transitions may remain unavailable by design.
 - Cross-correlation lag can be distorted by unequal sampling, repeated signals, and low-frequency trends; it is not causal evidence.
 - GNSS and EKF altitude may differ because of origin and ellipsoid/MSL datum choices.
 - Rule thresholds are engineering defaults and need per-airframe calibration against real, independently reviewed cases.
@@ -245,14 +245,9 @@ Validation currently establishes that the software behaves consistently on unit 
 
 Explicit user selection now has highest priority, followed by unit tokens in the source column name and then a conservative value-based check using sample count, interval, range, plausible sampling frequency, and duration. The mapping UI displays the inferred unit, confidence, and evidence. Ambiguous inputs such as a suffix-free `0, 1, 2, 3` timestamp are not converted or confirmed until the user selects seconds, milliseconds, or microseconds. Regression tests cover 1 Hz and other low-frequency second-based logs.
 
-### Priority 2. Step-Response Metric Refinement
+### Completed Foundation. Event-Based Step-Response Metrics
 
-- Separate rising and falling steps.
-- Prevent initial rising error from being counted as undershoot.
-- Define explicit pre-step and post-step steady-state windows.
-- Select the target transition explicitly when several setpoint changes exist.
-- Define behavior when the response never reaches the target.
-- Add synthetic rising, falling, missed-target, and multi-step response tests.
+Rising and falling setpoint events are now detected from stable pre/post plateau medians, and adjacent fast changes are merged while continuous ramps are rejected. Each event is analyzed only until the next transition. Rise time uses interpolated 10–90% crossings; overshoot is measured beyond the final target; undershoot is limited to wrong-way motion before the 10% crossing; and settling requires a continuous 0.5-second dwell inside the configured relative or absolute tolerance. Missed targets and insufficient windows return explicit unavailable states rather than misleading numbers. Synthetic tests cover both directions, multiple steps, ramps, overshoot, undershoot, missed targets, irregular timestamps, and settling dwell behavior.
 
 ### Priority 3. Cross-Correlation Reliability
 

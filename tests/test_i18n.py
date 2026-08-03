@@ -56,3 +56,10 @@ def test_timestamp_unit_inference_reason_is_translated():
     assert translate_text(reason, "en") == (
         "Column 'timestamp_ms' has unit token 'ms', which specifies milliseconds."
     )
+
+
+def test_step_response_failure_reason_is_translated():
+    reason = "응답이 step amplitude의 90% threshold에 도달하지 못했습니다."
+    assert translate_text(reason, "en") == (
+        "The response did not reach the 90% step-amplitude threshold."
+    )

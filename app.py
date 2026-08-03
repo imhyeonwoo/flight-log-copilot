@@ -564,6 +564,26 @@ def _render_metrics(result: dict, frame: pd.DataFrame) -> None:
             error = frame[["timestamp"]].copy()
             error["altitude_error"] = frame["altitude_setpoint"] - frame["ekf_altitude"]
             st.line_chart(error.set_index("timestamp"))
+        step_responses = altitude.get("step_responses", [])
+        if step_responses:
+            primary_index = altitude.get("primary_step_index")
+            st.markdown(f"**{_t('검출된 Step 응답', 'Detected step responses')}: {len(step_responses)}**")
+            step_rows = []
+            for index, step in enumerate(step_responses):
+                step_rows.append({
+                    _t("대표", "Primary"): "✓" if index == primary_index else "",
+                    _t("시각 (s)", "Time (s)"): step.get("timestamp_s"),
+                    _t("방향", "Direction"): _t("상승", "Up") if step.get("direction") == "up" else _t("하강", "Down"),
+                    _t("변화량 (m)", "Amplitude (m)"): step.get("amplitude_m"),
+                    _t("Rise (s)", "Rise (s)"): step.get("rise_time_s"),
+                    _t("Settling (s)", "Settling (s)"): step.get("settling_time_s"),
+                    _t("Overshoot (m)", "Overshoot (m)"): step.get("overshoot_m"),
+                    _t("Undershoot (m)", "Undershoot (m)"): step.get("undershoot_m"),
+                    _t("상태", "Status"): _tx(step.get("reason")) if step.get("reason") else _t("계산 완료", "Calculated"),
+                })
+            st.dataframe(pd.DataFrame(step_rows), use_container_width=True, hide_index=True)
+        elif altitude.get("dynamic_metrics_reason"):
+            st.caption(_tx(altitude["dynamic_metrics_reason"]))
         st.json(localize_values(altitude, _language()))
         st.markdown(f"**{_t('기준 고도-EKF 비교', 'Reference-altitude/EKF comparison')}**")
         st.json(localize_values(sensor, _language()))
