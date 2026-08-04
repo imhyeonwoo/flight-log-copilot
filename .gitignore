@@ -10,3 +10,6 @@ htmlcov/
 .streamlit/secrets.toml
 credentials.json
 ai_settings.local.json
+
+# my test data
+real_02.CSV
