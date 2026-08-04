@@ -15,6 +15,8 @@ def test_welch_detects_synthetic_frequency():
     result = analyze_frequency(frame)
     assert result["available"]
     assert abs(result["dominant_frequency_hz"] - vibration_hz) < 0.04
+    assert result["dominant_peak_power_ratio"] is not None
+    assert 0.0 < result["dominant_peak_power_ratio"] <= 1.0
 
 
 def test_frequency_handles_short_data():

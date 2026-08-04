@@ -7,6 +7,7 @@ from typing import Any, Dict
 import numpy as np
 import pandas as pd
 from scipy import signal
+from scipy.integrate import trapezoid
 
 
 def analyze_frequency(frame: pd.DataFrame, minimum_samples: int = 32) -> Dict[str, Any]:
@@ -57,7 +58,11 @@ def analyze_frequency(frame: pd.DataFrame, minimum_samples: int = 32) -> Dict[st
         peaks = np.array([int(np.nanargmax(psd))])
     ranked = peaks[np.argsort(psd[peaks])[::-1]][:3]
     dominant = int(ranked[0])
-    total_power = float(np.trapz(psd, frequencies)) if len(frequencies) > 1 else float(psd.sum())
+    total_power = (
+        float(trapezoid(psd, x=frequencies))
+        if len(frequencies) > 1
+        else float(psd.sum())
+    )
     bin_width = float(np.median(np.diff(frequencies))) if len(frequencies) > 1 else fs / nperseg
     peak_ratio = float(psd[dominant] * bin_width / total_power) if total_power > 0 else None
     return {
