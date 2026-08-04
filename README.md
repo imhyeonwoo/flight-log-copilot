@@ -2,6 +2,8 @@
 
 > AI-Powered UAV Flight Log Diagnosis
 
+[![CI](https://github.com/imhyeonwoo/flight-log-copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/imhyeonwoo/flight-log-copilot/actions/workflows/ci.yml)
+
 FlightLog Copilot is a working Streamlit application that maps heterogeneous UAV CSV logs to a canonical schema, computes deterministic flight-control metrics in Python, ranks explainable root-cause hypotheses, and optionally asks an AI provider to explain the structured results and recommend validation experiments.
 
 It is not a CSV-to-LLM wrapper: parameter interpretation, unit conversion, signal processing, quantitative evidence, and rule scores are produced locally before any optional AI request.
